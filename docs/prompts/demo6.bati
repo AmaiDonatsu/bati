@@ -1,0 +1,78 @@
+
+~~~
+# SIGNAL
+## ORIGEN:
+- font: function
+- function: $sin(x)$
+- hz: 10
+~~~
+
+# BATIAMP
+- id: amp
+
+## inputs
+- input1
+- input2
+
+## outputs
+- output
+
+## values
+- resistance: INFINIT
+
+## functions
+### Voltaje
+
+# RESISTOR
+- id: r1
+## inputs
+- input1
+## outputs
+- output1
+
+## values
+- resistance: 10000
+
+## functions
+### Voltaje
+- $V = I*R$
+
+# RESISTOR
+- id: r2
+## inputs
+- input1
+## outputs
+- output1
+
+## values
+- resistance: 10000
+
+## functions
+### Voltaje
+- $V = I*R$
+
+# CONNECTION
+- id: c0
+## from: SIGNAL
+## to: amp.input1
+
+# CONNECTION
+- id: c1
+## from: amp.output
+## to: r1.input1
+
+# CONNECTION
+- id: c2
+## from: r1.output1
+## to: amp.input2
+
+# CONNECTION
+- id: c3
+## from: amp.input2
+## to: GROUND
+
+# CONNECTION
+- id: c4
+## from: amp.output
+## to: GROUND
+
