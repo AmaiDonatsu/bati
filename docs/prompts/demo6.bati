@@ -19,9 +19,11 @@
 
 ## values
 - resistance: INFINIT
+- amplification: 1000000
 
 ## functions
 ### Voltaje
+$(input1.v - input2.v) * amplification$
 
 # RESISTOR
 - id: r1
