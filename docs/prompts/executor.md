@@ -159,3 +159,47 @@ cuando se declara un componente como RESISTOR es:
 ## Logica: Como calcular y simular el flujo de señales a travez del circuito
 
 ## Lógica: Runtime
+
+en el ejemplo de [demo6](demo6.bati) podemos ver un ejemplo donde se incluye un amplificador operacional, este componente es clave para comenzar a definir el runtime.
+el BATIAMP es un componente para testear los op-amps, incluir componentes de este tipo cambia el paradigma de como se ejecuta el programa
+
+## Flujo esperado:
+
+La forma en la que se espera que el usuario ejecute un programa bati es la siguiente:
+
+1. escribir su archivo .bati siguiendo las reglas de la sintaxis.
+2. ejecutar el programa bati usando el comando `bati` seguido de la ruta del archivo .bati. ej:
+
+```bash
+bati ./examples/demo1.bati
+```
+
+3. el programa bati lee el archivo, y ejecuta el flujo de la señal a travez del circuito, buscando conexiones, corto circuito, etc.
+
+4. el programa va a ejecutar 3 partes clave, las cuales se ejecutan de forma asincrona: la primera parte es la ejecución de la señal (SIGNAL_EXE), si la señal vistual o simulada con una función matemática, se creará un loop en la que esté siguiendo este ciclo, esta información se envía en tiempo real en stream a la parte 2 del executor, el cual es el flujo de señal (SIGNAL_FLOW), el flujo de selal funciona básicamente como un flujo constante, no está siendo intermitente con las señales que envía, si no que, se expande un flujo a travéz de todo el circuito, la señal tiene diferentes propiedades según el punto del circuito, si SIGNAL_EXE tiene una función que hace variar la señal cada 0.1 segundos, hará que la señal de SIGNAL_FLOW varíe a la misma frecuencia y con los mismos "cuantos" no depende de que tantas veces dispare una señal SIGNAL_EXE, SIGNAL_FLOW es un flujo constante y fijo, pero sí varía según la entrada que reciba, de esta forma, SIGNAL_FLOW tiene el "potencial" de mostrar las variaciones tan rápido como lo dicte la fuente.
+
+la ultima parte es SIGNAL_MONITOR, esta parte es la que comparte toda la información en tiempo real, poremos seleccionar un componente especifico, un rango, etc, y ver en tiempo real el estado de la señal.
+
+cuando se ejecuta el comando, se inicia un programa de consola,
+
+```bash
+bati>
+```
+
+el cual está esperando comandos para monitorear componentes en específico.
+
+```bash
+bati> monitor r1
+```
+
+ahí bati responderá
+
+```bash
+v: 9
+i: 0.009
+r: 1000
+```
+
+estos valores irán variando si la señal varía.
+
+el punto fuerte es poder conectarse por ws al monitor, esto permite que otros programas puedan obtener la información del circuito en tiempo real, más completa y en volumen de datos más grane y pesado para poder procesarlo.
