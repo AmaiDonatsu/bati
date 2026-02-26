@@ -1,0 +1,61 @@
+# batita
+
+~~~
+# SIGNAL
+## ORIGEN:
+- font: function
+- function: 9
+~~~
+
+# RESISTOR
+- id: R1
+## inputs
+- input1
+## outputs
+- output1
+
+## Values
+- resistance: 1000
+
+## functions
+### Ampere
+- $I = input1.v/resistance$
+### Voltaje
+- $V = I*R$
+### Ohm
+- $R = V/I$
+
+
+# RESISTOR
+- id: r2
+## inputs
+- input1
+## outputs
+- output1
+
+## Values
+- resistance: 2000
+
+## functions
+### Ampere
+- $input1.v/resistance$
+### Voltaje
+- $I*R$
+### Ohm
+- $V/I$
+
+
+# CONNECTION
+- id: c0
+## from: SIGNAL
+## to: R1.input1
+
+# CONNECTION
+- id: c1
+## from: R1.output1
+## to: R2.input1
+
+# CONNECTION
+- id: c2
+## from: R2.output1
+## to: GROUND
