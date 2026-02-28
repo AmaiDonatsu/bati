@@ -6,6 +6,7 @@ import { CircuitGraph } from "./src/runtime/CircuitGraph";
 import { SignalExe } from "./src/runtime/SignalExe";
 import { SignalFlow } from "./src/runtime/SignalFlow";
 import { SignalMonitor } from "./src/runtime/SignalMonitor";
+import { SignalWS } from "./src/runtime/SignalWS";
 import { createComponent } from "./src/runtime/components/ComponentFactory";
 import type { BaseComponent } from "./src/runtime/components/BaseComponent";
 
@@ -84,15 +85,20 @@ async function main(): Promise<void> {
     signalFlow.propagate(voltage);
   });
 
-  // 6. Iniciar la simulación
+  // 6. SIGNAL_WS — Servidor WebSocket
+  const signalWS = new SignalWS(globalState, signalExe);
+  signalWS.start();
+
+  // 7. Iniciar la simulación
   signalExe.start();
 
-  // 7. SIGNAL_MONITOR — Consola interactiva
+  // 8. SIGNAL_MONITOR — Consola interactiva
   const monitor = new SignalMonitor(globalState, signalExe);
   await monitor.start();
 
   // Limpieza
   signalExe.stop();
+  signalWS.stop();
   process.exit(0);
 }
 
