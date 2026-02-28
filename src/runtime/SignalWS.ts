@@ -39,59 +39,78 @@ export class SignalWS {
   /** Inicia el servidor WebSocket */
   start(): void {
     const self = this;
+    const maxRetries = 5;
 
-    this.server = Bun.serve({
-      port: this.port,
-      fetch(req, server) {
-        // Upgrade HTTP → WebSocket
-        const upgraded = server.upgrade(req, {
-          data: { subscribedTo: null } as ClientData,
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const tryPort = this.port + attempt;
+      try {
+        this.server = Bun.serve({
+          port: tryPort,
+          fetch(req, server) {
+            // Upgrade HTTP → WebSocket
+            const upgraded = server.upgrade(req, {
+              data: { subscribedTo: null } as ClientData,
+            });
+            if (upgraded) return undefined;
+
+            // Si no es WS, responder con info
+            return new Response(
+              JSON.stringify({
+                service: "bati-runtime",
+                ws: `ws://localhost:${tryPort}`,
+                status: self.signalExe.isRunning() ? "running" : "stopped",
+              }),
+              {
+                headers: { "Content-Type": "application/json" },
+              }
+            );
+          },
+          websocket: {
+            open(ws) {
+              self.clients.set(ws, ws.data as ClientData);
+              // Enviar snapshot al conectarse
+              self.sendTo(ws, {
+                type: "snapshot",
+                payload: self.buildSnapshot(),
+              });
+            },
+            message(ws, message) {
+              self.handleMessage(ws, message.toString());
+            },
+            close(ws) {
+              self.clients.delete(ws);
+            },
+          },
         });
-        if (upgraded) return undefined;
 
-        // Si no es WS, responder con info
-        return new Response(
-          JSON.stringify({
-            service: "bati-runtime",
-            ws: `ws://localhost:${self.port}`,
-            status: self.signalExe.isRunning() ? "running" : "stopped",
-          }),
-          {
-            headers: { "Content-Type": "application/json" },
-          }
+        this.port = tryPort;
+
+        // Suscribirse a updates del GlobalState
+        this.globalState.onUpdate((componentId, state) => {
+          this.broadcastUpdate(componentId, state);
+        });
+
+        // Suscribirse a ticks del SignalExe
+        this.signalExe.onTick((voltage, tick, time) => {
+          this.broadcastTick(voltage, tick, time);
+        });
+
+        console.log(
+          `  🌐 WebSocket activo en ws://localhost:${this.port}`
         );
-      },
-      websocket: {
-        open(ws) {
-          self.clients.set(ws, ws.data as ClientData);
-          // Enviar snapshot al conectarse
-          self.sendTo(ws, {
-            type: "snapshot",
-            payload: self.buildSnapshot(),
-          });
-        },
-        message(ws, message) {
-          self.handleMessage(ws, message.toString());
-        },
-        close(ws) {
-          self.clients.delete(ws);
-        },
-      },
-    });
-
-    // Suscribirse a updates del GlobalState
-    this.globalState.onUpdate((componentId, state) => {
-      this.broadcastUpdate(componentId, state);
-    });
-
-    // Suscribirse a ticks del SignalExe
-    this.signalExe.onTick((voltage, tick, time) => {
-      this.broadcastTick(voltage, tick, time);
-    });
-
-    console.log(
-      `  🌐 WebSocket activo en ws://localhost:${this.port}`
-    );
+        return; // Éxito
+      } catch (err: any) {
+        if (err?.code === "EADDRINUSE" && attempt < maxRetries - 1) {
+          // Puerto ocupado, probar el siguiente
+          continue;
+        }
+        // Si no es EADDRINUSE o se agotaron los intentos, advertir pero no crashear
+        console.log(
+          `  ⚠  WebSocket no pudo iniciar (puerto ${tryPort} ocupado). La simulación continúa sin WS.`
+        );
+        return;
+      }
+    }
   }
 
   /** Detiene el servidor */
