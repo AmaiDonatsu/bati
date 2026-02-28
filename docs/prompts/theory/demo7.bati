@@ -1,0 +1,136 @@
+# batita
+
+~~~
+# SIGNAL
+## ORIGEN:
+- font: function
+- function: $sin(x)$
+- hz: 1
+~~~
+
+# RESISTOR
+- id: r1
+## values
+- resistance: 1000
+## inputs
+- input1
+## outputs
+- output1
+
+# RESISTOR
+- id: r2
+## values
+- resistance: 2000
+## inputs
+- input1
+## outputs
+- output1
+
+# RESISTOR
+- id: r3
+## values
+- resistance: 2000
+## inputs
+- input1
+## outputs
+- output1
+
+# RESISTOR
+- id: r4
+## values
+- resistance: 1500
+## inputs
+- input1
+## outputs
+- output1
+
+# RESISTOR
+- id: r5
+## values
+- resistance: 3000
+## inputs
+- input1
+## outputs
+- output1
+
+# RESISTOR
+- id: r6
+## values
+- resistance: 3000
+## inputs
+- input1
+## outputs
+- output1
+
+# CAPACITOR
+- id: c1
+## values
+- capacitance: 0.001
+## inputs
+- input1
+## outputs
+- output1
+
+# DIODE
+- id: d1
+## values
+- voltage: 0.7
+## inputs
+- input1
+## outputs
+- output1
+
+# CONNECTION
+- id: cn1
+## from: SIGNAL
+## to: r1.input1
+
+# CONNECTION
+- id: cn2
+## from: r1.output1
+## to: r2.input1
+
+# CONNECTION
+- id: cn3
+## from: r1.output1
+## to: r3.input1
+
+# CONNECTION
+- id: cn4
+## from: r3.output1
+## to: c1.input1
+
+# CONNECTION
+- id: cn5
+## from: c1.output1
+## to: r4.input1
+
+# CONNECTION
+- id: cn6
+## from: r2.output1
+## to: r4.input1
+
+# CONNECTION
+- id: cn7
+## from: r4.output1
+## to: d1.input1
+
+# CONNECTION
+- id: cn8
+## from: d1.output1
+## to: r5.input1
+
+# CONNECTION
+- id: cn9
+## from: d1.output1
+## to: r6.input1
+
+# CONNECTION
+- id: cn10
+## from: r6.output1
+## to: GROUND
+
+# CONNECTION
+- id: cn11
+## from: r5.output1
+## to: GROUND
