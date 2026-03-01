@@ -165,7 +165,7 @@ export function parse(tokens: Token[], filename: string): BatiFile {
       if (tok.type === "LIST_ITEM_KV") {
         const key = tok.key!.toLowerCase();
         if (key === "font") {
-          signal.font = tok.value as "function" | "external";
+          signal.font = tok.value as "function" | "device";
         } else if (key === "function") {
           signal.functionExpr = tok.value;
           // Si la función contiene $ y variables, es AC
@@ -173,6 +173,8 @@ export function parse(tokens: Token[], filename: string): BatiFile {
         } else if (key === "hz") {
           signal.hz = parseFloat(tok.value);
           signal.isAC = true;
+        } else if (key === "device") {
+          signal.deviceId = tok.value.trim();
         }
         pos++;
         continue;
@@ -187,6 +189,20 @@ export function parse(tokens: Token[], filename: string): BatiFile {
         tokens[pos - 1]?.line ?? 1,
         "Bloque SIGNAL no tiene cierre '~~~'."
       );
+    }
+
+    // Validación: si font es device, debe tener deviceId
+    if (signal.font === "device" && !signal.deviceId) {
+      addError(
+        tokens[pos - 1]?.line ?? 1,
+        "SIGNAL con font 'device' requiere la propiedad 'device' con el id del dispositivo."
+      );
+    }
+
+    // Si es device, limpiar functionExpr (no se usa)
+    if (signal.font === "device") {
+      signal.functionExpr = "";
+      signal.isAC = false;
     }
 
     return signal;

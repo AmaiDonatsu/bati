@@ -58,7 +58,12 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  console.log("\n  🚀 Iniciando simulación...\n");
+  if (batiFile.signal.font === "device") {
+    const devId = batiFile.signal.deviceId;
+    console.log(`\n  📡 Modo device — esperando señal externa de "${devId}"...\n`);
+  } else {
+    console.log("\n  🚀 Iniciando simulación...\n");
+  }
 
   // 1. Estado global
   const globalState = new GlobalState();

@@ -1,0 +1,41 @@
+# batita
+
+~~~
+# SIGNAL
+## ORIGEN:
+- font: device
+- device: sensor_01
+~~~
+
+# RESISTOR
+- id: R1
+## values
+- resistance: 1000
+## inputs
+- input1
+## outputs
+- output1
+
+# RESISTOR
+- id: R2
+## values
+- resistance: 2000
+## inputs
+- input1
+## outputs
+- output1
+
+# CONNECTION
+- id: c0
+## from: SIGNAL
+## to: R1.input1
+
+# CONNECTION
+- id: c1
+## from: R1.output1
+## to: R2.input1
+
+# CONNECTION
+- id: c2
+## from: R2.output1
+## to: GROUND

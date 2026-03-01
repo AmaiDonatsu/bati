@@ -31,10 +31,25 @@ export class SignalExe {
     this.listeners.push(callback);
   }
 
+  /** ¿El motor está en modo device externo? */
+  isDeviceMode(): boolean {
+    return this.signal.font === "device";
+  }
+
+  /** ID del device esperado (solo en modo device) */
+  getExpectedDeviceId(): string | undefined {
+    return this.signal.deviceId;
+  }
+
   /** Inicia el loop de señal */
   start(): void {
     if (this.running) return;
     this.running = true;
+
+    // En modo device, no hay loop interno — el voltaje llega por WS
+    if (this.isDeviceMode()) {
+      return;
+    }
 
     // Evaluar el primer tick inmediatamente
     this.tick();
@@ -57,6 +72,25 @@ export class SignalExe {
   /** ¿Está corriendo? */
   isRunning(): boolean {
     return this.running;
+  }
+
+  /**
+   * Inyecta un voltaje externo (modo device).
+   * Avanza el tick, actualiza el estado global y notifica a los listeners.
+   */
+  injectVoltage(voltage: number): void {
+    if (!this.running) return;
+
+    this.globalState.advanceTick(this.config.tickInterval);
+    const { tick, time } = this.globalState;
+
+    // Actualizar estado global
+    this.globalState.signalVoltage = voltage;
+
+    // Notificar listeners (esto propaga al SIGNAL_FLOW)
+    for (const listener of this.listeners) {
+      listener(voltage, tick, time);
+    }
   }
 
   /** Ejecuta un tick de la señal */
@@ -94,3 +128,4 @@ export class SignalExe {
     }
   }
 }
+

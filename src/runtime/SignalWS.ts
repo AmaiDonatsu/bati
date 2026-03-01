@@ -4,6 +4,7 @@ import type { ComponentState } from "./types";
 
 // ============================================================
 // SignalWS — Servidor WebSocket para monitoreo en tiempo real
+//            + recepción de señal de devices externos
 // ============================================================
 
 /** Mensaje del servidor → cliente */
@@ -18,9 +19,17 @@ interface WSClientMessage {
   componentId?: string;
 }
 
+/** Mensaje de un device externo */
+interface DeviceMessage {
+  id: string;
+  value: number;
+}
+
 /** Datos del cliente por socket */
 interface ClientData {
   subscribedTo: string | null; // null = recibe todo
+  isDevice: boolean; // true si es un socket de device externo
+  deviceId: string | null; // id del device (solo si isDevice)
 }
 
 export class SignalWS {
@@ -47,9 +56,29 @@ export class SignalWS {
         this.server = Bun.serve({
           port: tryPort,
           fetch(req, server) {
-            // Upgrade HTTP → WebSocket
+            const url = new URL(req.url);
+
+            // Ruta /device/{id} → socket de device externo
+            const deviceMatch = url.pathname.match(/^\/device\/(.+)$/);
+            if (deviceMatch) {
+              const deviceId = deviceMatch[1];
+              const upgraded = server.upgrade(req, {
+                data: {
+                  subscribedTo: null,
+                  isDevice: true,
+                  deviceId,
+                } as ClientData,
+              });
+              if (upgraded) return undefined;
+            }
+
+            // Ruta genérica → socket de monitor
             const upgraded = server.upgrade(req, {
-              data: { subscribedTo: null } as ClientData,
+              data: {
+                subscribedTo: null,
+                isDevice: false,
+                deviceId: null,
+              } as ClientData,
             });
             if (upgraded) return undefined;
 
@@ -58,6 +87,8 @@ export class SignalWS {
               JSON.stringify({
                 service: "bati-runtime",
                 ws: `ws://localhost:${tryPort}`,
+                deviceMode: self.signalExe.isDeviceMode(),
+                expectedDevice: self.signalExe.getExpectedDeviceId() ?? null,
                 status: self.signalExe.isRunning() ? "running" : "stopped",
               }),
               {
@@ -67,17 +98,60 @@ export class SignalWS {
           },
           websocket: {
             open(ws) {
-              self.clients.set(ws, ws.data as ClientData);
-              // Enviar snapshot al conectarse
-              self.sendTo(ws, {
-                type: "snapshot",
-                payload: self.buildSnapshot(),
-              });
+              const data = ws.data as ClientData;
+              self.clients.set(ws, data);
+
+              if (data.isDevice) {
+                // Socket de device — validar ID inmediatamente
+                const expectedId = self.signalExe.getExpectedDeviceId();
+                if (expectedId && data.deviceId === expectedId) {
+                  console.log(
+                    `  📡 Device "${data.deviceId}" conectado`
+                  );
+                  self.sendTo(ws, {
+                    type: "snapshot",
+                    payload: {
+                      status: "connected",
+                      expectedId,
+                      message: `Device "${data.deviceId}" registrado correctamente.`,
+                    },
+                  });
+                } else {
+                  self.sendTo(ws, {
+                    type: "error",
+                    payload: {
+                      message: `Device "${data.deviceId}" rechazado. El archivo .bati espera device "${expectedId ?? "ninguno"}".`,
+                    },
+                  });
+                  console.log(
+                    `  ⚠  Device "${data.deviceId}" rechazado (esperado: "${expectedId ?? "ninguno"}")`
+                  );
+                }
+              } else {
+                // Socket de monitor — enviar snapshot
+                self.sendTo(ws, {
+                  type: "snapshot",
+                  payload: self.buildSnapshot(),
+                });
+              }
             },
             message(ws, message) {
-              self.handleMessage(ws, message.toString());
+              const data = self.clients.get(ws);
+              if (!data) return;
+
+              if (data.isDevice) {
+                self.handleDeviceMessage(ws, data, message.toString());
+              } else {
+                self.handleMonitorMessage(ws, message.toString());
+              }
             },
             close(ws) {
+              const data = self.clients.get(ws);
+              if (data?.isDevice) {
+                console.log(
+                  `  📡 Device "${data.deviceId}" desconectado`
+                );
+              }
               self.clients.delete(ws);
             },
           },
@@ -98,13 +172,17 @@ export class SignalWS {
         console.log(
           `  🌐 WebSocket activo en ws://localhost:${this.port}`
         );
+        if (this.signalExe.isDeviceMode()) {
+          const devId = this.signalExe.getExpectedDeviceId();
+          console.log(
+            `  📡 Esperando device "${devId}" en ws://localhost:${this.port}/device/${devId}`
+          );
+        }
         return; // Éxito
       } catch (err: any) {
         if (err?.code === "EADDRINUSE" && attempt < maxRetries - 1) {
-          // Puerto ocupado, probar el siguiente
           continue;
         }
-        // Si no es EADDRINUSE o se agotaron los intentos, advertir pero no crashear
         console.log(
           `  ⚠  WebSocket no pudo iniciar (puerto ${tryPort} ocupado). La simulación continúa sin WS.`
         );
@@ -122,8 +200,66 @@ export class SignalWS {
     this.clients.clear();
   }
 
-  /** Procesa un mensaje del cliente */
-  private handleMessage(ws: unknown, raw: string): void {
+  // ── Device Messages ──────────────────────────────────────
+
+  /** Procesa un mensaje de un device externo */
+  private handleDeviceMessage(
+    ws: unknown,
+    data: ClientData,
+    raw: string
+  ): void {
+    // Validar que el device esté autorizado
+    const expectedId = this.signalExe.getExpectedDeviceId();
+    if (!expectedId || data.deviceId !== expectedId) {
+      this.sendTo(ws, {
+        type: "error",
+        payload: {
+          message: `Device "${data.deviceId}" no autorizado. Se espera "${expectedId ?? "ninguno"}".`,
+        },
+      });
+      return;
+    }
+
+    // Parsear mensaje del device
+    let msg: DeviceMessage;
+    try {
+      msg = JSON.parse(raw);
+    } catch {
+      this.sendTo(ws, {
+        type: "error",
+        payload: { message: "JSON inválido del device" },
+      });
+      return;
+    }
+
+    // Validar estructura
+    if (typeof msg.value !== "number") {
+      this.sendTo(ws, {
+        type: "error",
+        payload: { message: "El campo 'value' debe ser un número." },
+      });
+      return;
+    }
+
+    // Validar que el id del mensaje coincide con el id del socket
+    if (msg.id !== data.deviceId) {
+      this.sendTo(ws, {
+        type: "error",
+        payload: {
+          message: `El id del mensaje ("${msg.id}") no coincide con el id del device ("${data.deviceId}").`,
+        },
+      });
+      return;
+    }
+
+    // ¡Todo válido! Inyectar el voltaje al motor
+    this.signalExe.injectVoltage(msg.value);
+  }
+
+  // ── Monitor Messages ─────────────────────────────────────
+
+  /** Procesa un mensaje de un cliente monitor */
+  private handleMonitorMessage(ws: unknown, raw: string): void {
     let msg: WSClientMessage;
     try {
       msg = JSON.parse(raw);
@@ -141,7 +277,6 @@ export class SignalWS {
     switch (msg.action) {
       case "subscribe":
         if (msg.componentId) {
-          // Verificar que existe
           const allIds = this.globalState.getComponentIds();
           const foundId = allIds.find(
             (id) => id.toLowerCase() === msg.componentId!.toLowerCase()
@@ -195,30 +330,38 @@ export class SignalWS {
           type: "error",
           payload: {
             message: `Acción desconocida: '${(msg as any).action}'`,
-            available: ["subscribe", "unsubscribe", "getSnapshot", "getSignal"],
+            available: [
+              "subscribe",
+              "unsubscribe",
+              "getSnapshot",
+              "getSignal",
+            ],
           },
         });
     }
   }
 
-  /** Broadcast de update de componente */
-  private broadcastUpdate(componentId: string, state: ComponentState): void {
+  // ── Broadcast ────────────────────────────────────────────
+
+  /** Broadcast de update de componente (solo a monitors) */
+  private broadcastUpdate(componentId: string, _state: ComponentState): void {
     const payload = this.buildComponentPayload(componentId);
 
     for (const [ws, data] of this.clients) {
-      // Si está suscrito a un componente específico, filtrar
+      if (data.isDevice) continue; // No enviar a devices
       if (data.subscribedTo && data.subscribedTo !== componentId) continue;
       this.sendTo(ws, { type: "update", payload });
     }
   }
 
-  /** Broadcast de tick */
+  /** Broadcast de tick (solo a monitors) */
   private broadcastTick(voltage: number, tick: number, time: number): void {
     const msg: WSServerMessage = {
       type: "tick",
       payload: { voltage, tick, time },
     };
-    for (const [ws] of this.clients) {
+    for (const [ws, data] of this.clients) {
+      if (data.isDevice) continue; // No enviar a devices
       this.sendTo(ws, msg);
     }
   }
@@ -231,6 +374,8 @@ export class SignalWS {
       // Cliente desconectado
     }
   }
+
+  // ── Snapshot builders ────────────────────────────────────
 
   /** Construye snapshot completo del circuito */
   private buildSnapshot(): object {
@@ -273,3 +418,4 @@ export class SignalWS {
     };
   }
 }
+

@@ -18,7 +18,7 @@ export type ComponentType =
 export type ComponentCategory = "non-polar" | "polar" | "active";
 
 /** Tipo de fuente de señal */
-export type FontType = "function" | "external";
+export type FontType = "function" | "device";
 
 /** Severidad de errores de sintaxis */
 export type ErrorSeverity = "error" | "warning";
@@ -33,6 +33,7 @@ export interface Signal {
   functionExpr: string; // constante o función matemática (ej: "9" o "$sin(x)$")
   hz?: number; // frecuencia en hercios (solo AC)
   isAC: boolean; // true si la función varía con el tiempo
+  deviceId?: string; // id del device externo (solo font: "device")
 }
 
 /** Un puerto de entrada o salida de un componente */
